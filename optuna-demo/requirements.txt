@@ -1,0 +1,9 @@
+optuna
+xgboost
+scikit-learn
+streamlit
+pandas
+numpy
+ucimlrepo
+plotly
+matplotlib
