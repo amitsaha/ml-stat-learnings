@@ -24,10 +24,12 @@ enc = OneHotEncoder(drop='if_binary')
 X_transformed = enc.fit(X).transform(X)
 
 
-clf = tree.DecisionTreeClassifier(max_leaf_nodes=10, random_state=0)
+clf = tree.DecisionTreeClassifier(max_leaf_nodes=5, random_state=0)
 clf = clf.fit(X_transformed, y)
 
 plot_tree(clf, filled=True)
+
+import pdb; pdb.set_trace()
 
 plt.savefig('decision_tree.png')
 
