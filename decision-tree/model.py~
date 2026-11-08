@@ -88,78 +88,32 @@ plot_tree(
 plt.savefig('decision_tree.png', dpi=300)
 #plt.show()
 
-# Tree stats
 
-n_nodes = clf.tree_.node_count
-children_left = clf.tree_.children_left
-children_right = clf.tree_.children_right
-feature = clf.tree_.feature
+# https://scikit-learn.org/stable/auto_examples/tree/plot_unveil_tree_structure.html
 threshold = clf.tree_.threshold
-values = clf.tree_.value
-
-node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
-is_leaves = np.zeros(shape=n_nodes, dtype=bool)
-stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
-while len(stack) > 0:
-    # `pop` ensures each node is only visited once
-    node_id, depth = stack.pop()
-    node_depth[node_id] = depth
-
-    # If the left and right child of a node is not the same we have a split
-    # node
-    is_split_node = children_left[node_id] != children_right[node_id]
-    # If a split node, append left and right children and depth to `stack`
-    # so we can loop through them
-    if is_split_node:
-        stack.append((children_left[node_id], depth + 1))
-        stack.append((children_right[node_id], depth + 1))
-    else:
-        is_leaves[node_id] = True
-
-#print(
-#    "The binary tree structure has {n} nodes and has "
-#    "the following tree structure:\n".format(n=n_nodes)
-#)
-
-#print(f"Depth of tree: {max(node_depth)}")
-
-#for i in range(n_nodes):
-#    if is_leaves[i]:
-#        print(
-#            "{space}node={node} is a leaf node with value={value}.".format(
-#                space=node_depth[i] * "\t", node=i, value=np.around(values[i], 3)
-#            )
-#        )
-#    else:
-#        print(
-#            "{space}node={node} is a split node with value={value}: "
-#            "go to node {left} if X[:, {feature}] <= {threshold} "
-#            "else to node {right}.".format(
-#                space=node_depth[i] * "\t",
-#                node=i,
-#                left=children_left[i],
-#                feature=feature[i],
-#                threshold=threshold[i],
-#                right=children_right[i],
-#                value=np.around(values[i], 3),
-#            )
-#        )
+feature = clf.tree_.feature
 
 # Decision path
-
 decision_paths = clf.decision_path(X_test_transformed)
-leaf_id = clf.apply(X_test_transformed)
+# we will reach a leaf when a prediction is done
+# apply gives us as the leaf the sample ends up in
+leaf_idx = clf.apply(X_test_transformed)
 
 sample_id = 0
 # obtain ids of the nodes `sample_id` goes through, i.e., row `sample_id`
 node_index = decision_paths.indices[
     decision_paths.indptr[sample_id] : decision_paths.indptr[sample_id + 1]
 ]
+# node_index
+# The nodes that sample_id traversed on its way to be predicted
+# array([0, 6, 7, 8])
+# the last node id need not be a leaf node as the tree may not know how to predict
+# this new item?
 
 print("Rules used to predict sample {id}:\n".format(id=sample_id))
 for node_id in node_index:
     # continue to the next node if it is a leaf node
-    if leaf_id[sample_id] == node_id:
+    if leaf_idx[sample_id] == node_id:
         continue
 
     # check if value of the split feature for sample 0 is below threshold
@@ -181,33 +135,39 @@ for node_id in node_index:
     )
 
 # visualize decision path
-import graphviz
+# we want to get access to the underlying graph structure from the graphviz data format
+# and then find the nodes above for this sample and color/mark them differently
+# https://github.com/pydot/pydot
+import pydot
 dot_data = tree.export_graphviz(clf, out_file=None,
                      feature_names=encoder.get_feature_names_out(), 
                      #class_names=[],
                      filled=True, rounded=True,
                      special_characters=True)
-graph = graphviz.Source(dot_data)
+graph = pydot.graph_from_dot_data(dot_data)[0]
+
 # https://stackoverflow.com/questions/55878247/how-to-display-the-path-of-a-decision-tree-for-test-samples
-for decision_path in decision_paths:
-    import pdb; pdb.set_trace()
-    for n, node_value in enumerate(decision_path.toarray()[0]):
-        if node_value == 0:
-            continue
-        node = graph.get_node(str(n))[0]            
-        node.set_fillcolor('green')
-        labels = node.get_attributes()['label'].split('<br/>')
-        for i, label in enumerate(labels):
-            if label.startswith('samples = '):
-                labels[i] = 'samples = {}'.format(int(label.split('=')[1]) + 1)
+decision_path = decision_paths[sample_id]
+for n, node_value in enumerate(decision_path.toarray()[0]):
+    if node_value == 0:
+        continue
 
-        node.set('label', '<br/>'.join(labels))
+    node = graph.get_node(str(n))[0]            
+    print(node)
 
-filename = 'decision_path_tree.png'
+    node.set_fillcolor('green')
+    labels = node.get_attributes()['label'].split('<br/>')
+    for i, label in enumerate(labels):
+        if label.startswith('samples = '):
+            labels[i] = 'samples = {}'.format(int(label.split('=')[1]) + 1)
+
+    node.set('label', '<br/>'.join(labels))
+
+filename = 'decision_path_tree_sample.png'
 graph.write_png(filename)
 
 
-# prediction
+# prediction stats
 train_accuracy = clf.score(X_train_transformed, y_train)
 print(f'Train accuracy: {train_accuracy}')
 
