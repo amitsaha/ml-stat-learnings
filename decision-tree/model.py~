@@ -59,6 +59,10 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
 # reparse the string data as categorical data
 enc = OneHotEncoder(drop='if_binary')
 encoder = enc.fit(X)
+#(Pdb) encoder.get_feature_names_out()[456]
+#'number_emergency_76'
+#(Pdb) encoder.get_feature_names_out()[458]
+#'number_inpatient_1'
 
 X_train_transformed = encoder.transform(X_train)
 X_test_transformed = encoder.transform(X_test)
@@ -68,14 +72,19 @@ X_test_transformed = encoder.transform(X_test)
 
 
 
-
-#clf = tree.DecisionTreeClassifier(max_depth=3, random_state=0)
-clf = tree.DecisionTreeClassifier(random_state=0)
+clf = tree.DecisionTreeClassifier(max_depth=3, random_state=42)
 clf = clf.fit(X_train_transformed, y_train)
 
 # visualization
 
-plot_tree(clf, filled=True, proportion=True)
+plot_tree(
+        clf, 
+        filled=True, 
+        proportion=True, 
+        feature_names=encoder.get_feature_names_out(), 
+        class_names=True,
+        rounded=True,
+)
 plt.savefig('decision_tree.png', dpi=300)
 #plt.show()
 
@@ -107,12 +116,12 @@ while len(stack) > 0:
     else:
         is_leaves[node_id] = True
 
-print(
-    "The binary tree structure has {n} nodes and has "
-    "the following tree structure:\n".format(n=n_nodes)
-)
+#print(
+#    "The binary tree structure has {n} nodes and has "
+#    "the following tree structure:\n".format(n=n_nodes)
+#)
 
-print(f"Depth of tree: {max(node_depth)}")
+#print(f"Depth of tree: {max(node_depth)}")
 
 #for i in range(n_nodes):
 #    if is_leaves[i]:
@@ -138,13 +147,13 @@ print(f"Depth of tree: {max(node_depth)}")
 
 # Decision path
 
-node_indicator = clf.decision_path(X_test_transformed)
+decision_paths = clf.decision_path(X_test_transformed)
 leaf_id = clf.apply(X_test_transformed)
 
 sample_id = 0
 # obtain ids of the nodes `sample_id` goes through, i.e., row `sample_id`
-node_index = node_indicator.indices[
-    node_indicator.indptr[sample_id] : node_indicator.indptr[sample_id + 1]
+node_index = decision_paths.indices[
+    decision_paths.indptr[sample_id] : decision_paths.indptr[sample_id + 1]
 ]
 
 print("Rules used to predict sample {id}:\n".format(id=sample_id))
@@ -170,3 +179,40 @@ for node_id in node_index:
             threshold=threshold[node_id],
         )
     )
+
+# visualize decision path
+import graphviz
+dot_data = tree.export_graphviz(clf, out_file=None,
+                     feature_names=encoder.get_feature_names_out(), 
+                     #class_names=[],
+                     filled=True, rounded=True,
+                     special_characters=True)
+graph = graphviz.Source(dot_data)
+# https://stackoverflow.com/questions/55878247/how-to-display-the-path-of-a-decision-tree-for-test-samples
+for decision_path in decision_paths:
+    import pdb; pdb.set_trace()
+    for n, node_value in enumerate(decision_path.toarray()[0]):
+        if node_value == 0:
+            continue
+        node = graph.get_node(str(n))[0]            
+        node.set_fillcolor('green')
+        labels = node.get_attributes()['label'].split('<br/>')
+        for i, label in enumerate(labels):
+            if label.startswith('samples = '):
+                labels[i] = 'samples = {}'.format(int(label.split('=')[1]) + 1)
+
+        node.set('label', '<br/>'.join(labels))
+
+filename = 'decision_path_tree.png'
+graph.write_png(filename)
+
+
+# prediction
+train_accuracy = clf.score(X_train_transformed, y_train)
+print(f'Train accuracy: {train_accuracy}')
+
+accuracy = clf.score(X_test_transformed, y_test)
+print(f'Test accuracy: {accuracy}')
+
+pred_proba = clf.predict_proba(X_test_transformed)
+
